@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import argparse
@@ -18,13 +19,14 @@ from utils import (
     decompress_gz_file,
     validate_date,
     generate_paths,
-    download_with_retry
+    download_with_retry,
+    clip_raster
 )
 
 logger = setup_logging()
 
 
-def download_chirps_data(start_date, end_date, data_type, output_dir, decompress=False, 
+def download_chirps_data(start_date, end_date, data_type, output_dir, clip, decompress=False, 
                          indefinite_mode=False, max_fails=DEFAULT_MAX_FAILS):
     """
     Download CHIRPS data within a date range.
@@ -49,25 +51,33 @@ def download_chirps_data(start_date, end_date, data_type, output_dir, decompress
         full_url = f"{CHIRPS_BASE_URLS[data_type]}{dir_path}{file_name}"
         dest_dir = os.path.join(output_dir, dir_path)
         os.makedirs(dest_dir, exist_ok=True)
-        success = download_with_retry(full_url, os.path.join(dest_dir, file_name))
-        
-        if success:
-            consecutive_fails = 0
-            if decompress:
-                compressed_file = os.path.join(dest_dir, file_name)
-                decompressed_file = compressed_file[:-3]  # Remove the .gz prefix
-                
-                if decompress_gz_file(compressed_file, decompressed_file):
-                    # Delete compressed file after successful decompression (cl arg)
-                    os.remove(compressed_file)
-        else:
-            consecutive_fails += 1
-            logger.warning(f"Download failed {consecutive_fails}/{max_fails}")
+        tif_file = os.path.join(dest_dir, file_name)
+
+        if not os.path.exists(tif_file.removesuffix(".gz")):
+            success = download_with_retry(full_url, os.path.join(dest_dir, file_name))
             
-            if indefinite_mode and consecutive_fails >= max_fails:
-                logger.info(f"Download stopped after {max_fails} consecutive failures")
-                break
-        
+            if success:
+                consecutive_fails = 0
+                if decompress:
+                    compressed_file = os.path.join(dest_dir, file_name)
+                    decompressed_file = compressed_file[:-3]  # Remove the .gz prefix
+                    
+                    if decompress_gz_file(compressed_file, decompressed_file):
+                        # Delete compressed file after successful decompression (cl arg)
+                        os.remove(compressed_file)
+                    
+                    if clip:
+                        clip_raster(decompressed_file)
+            else:
+                consecutive_fails += 1
+                logger.warning(f"Download failed {consecutive_fails}/{max_fails}")
+                
+                if indefinite_mode and consecutive_fails >= max_fails:
+                    logger.info(f"Download stopped after {max_fails} consecutive failures")
+                    break
+        else:
+            logger.info(f"File already exists, skipping download: {tif_file}")
+
         if data_type == 'daily':
             current_date += timedelta(days=1)
         else:
@@ -94,6 +104,7 @@ def parse_arguments():
                         help='Number of days/months to download after start-date')
     parser.add_argument('--max-fails', type=int, default=DEFAULT_MAX_FAILS,
                         help="Number of consecutive failures before stopping the indefinite download")
+    parser.add_argument('--clip', action='store_true', help="clipping tif data to morocco")
     
     return parser.parse_args()
 
@@ -129,6 +140,7 @@ def main():
         end_date=date_end,
         data_type=args.data_type,
         output_dir=args.output_dir,
+        clip=args.clip,
         decompress=args.decompress,
         indefinite_mode=indefinite_mode,
         max_fails=args.max_fails
