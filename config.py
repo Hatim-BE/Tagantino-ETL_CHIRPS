@@ -31,6 +31,7 @@ FILE_FORMAT_DAILY = "chirps-v2.0.{year}.{month:02d}.{day:02d}.tif.gz"
 FILE_FORMAT_MONTHLY = "chirps-v2.0.{year}.{month:02d}.tif.gz"
 DIR_FORMAT_DAILY = "{year}/"
 DIR_FORMAT_MONTHLY = ""
+MOROCCO_CLIP = "morocco.geojson"
 
 # Initialize logging configuration
 def setup_logging():

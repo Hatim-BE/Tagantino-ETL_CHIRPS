@@ -11,6 +11,10 @@ import shutil
 import requests
 from datetime import datetime
 import re
+import rasterio
+from rasterio.mask import mask
+import json
+import geopandas as gpd
 
 # Import configuration if the file is used directly
 try:
@@ -22,6 +26,7 @@ try:
         FILE_FORMAT_MONTHLY,
         DIR_FORMAT_DAILY,
         DIR_FORMAT_MONTHLY,
+        MOROCCO_CLIP,
         setup_logging
     )
     logger = setup_logging()
@@ -178,3 +183,39 @@ def parse_chirps_filename(filename):
         }
     
     raise ValueError(f"Could not parse date from CHIRPS filename: {filename}")
+
+def clip_raster(decompressed_file):
+    for attempt in range(DEFAULT_MAX_RETRIES):
+        try:
+            try:
+                morocco_geometry = gpd.read_file(MOROCCO_CLIP)
+                geometry = [json.loads(morocco_geometry.to_json())["features"][0]["geometry"]]
+            except Exception as e:
+                logger.error(f"Failed to load Morocco geometry: {e}")
+                return False
+            
+            # clipped_file = decompressed_file.replace('.tif', '_clipped.tif')
+            with rasterio.open(decompressed_file) as src:
+                out_image, out_transform = mask(src, geometry, crop=True)
+                out_meta = src.meta.copy()
+
+                # Update metadata
+                out_meta.update({
+                    "driver": "GTiff",
+                    "height": out_image.shape[1],
+                    "width": out_image.shape[2],
+                    "transform": out_transform
+                })
+                logger.info(f"Raster clipped to morocco sucessfully")
+
+            # Save clipped output
+            with rasterio.open(decompressed_file, "w", **out_meta) as dest:
+                dest.write(out_image)
+
+            return True
+
+        except Exception as e:
+            logger.warning(f"Attempt {attempt+1}/{DEFAULT_MAX_RETRIES} failed: {e}")
+
+        return False
+        
