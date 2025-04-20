@@ -1,0 +1,3 @@
+"""
+CHIRPS data downloader package
+"""
