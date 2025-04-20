@@ -11,7 +11,6 @@ import shutil
 import requests
 from datetime import datetime
 import re
-from dateutil.relativedelta import relativedelta
 
 # Import configuration if the file is used directly
 try:
@@ -121,18 +120,14 @@ def download_with_retry(url, dest_path, max_retries=DEFAULT_MAX_RETRIES):
         try:
             with requests.get(url, stream=True, timeout=DEFAULT_TIMEOUT) as r:
                 if r.status_code == 404:
-                    return False  # File not found
+                    logger.error(f"File not found at URL: {url}")
+                    return False
                 r.raise_for_status()
                 with open(dest_path, 'wb') as f:
                     for chunk in r.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
                         f.write(chunk)
                 logger.info(f"Download successful: {os.path.basename(dest_path)}")
                 return True
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 404:
-                logger.info(f"File not found: {os.path.basename(dest_path)}")
-                return False
-            logger.warning(f"Attempt {attempt+1}/{max_retries} failed: {e}")
         except Exception as e:
             logger.warning(f"Attempt {attempt+1}/{max_retries} failed: {e}")
     return False

@@ -1,9 +1,7 @@
 """
 Configuration settings for the CHIRPS ETL Pipeline.
 """
-import os
 import logging
-from datetime import timedelta
 
 # Base URLs for CHIRPS products
 CHIRPS_BASE_URLS = {
