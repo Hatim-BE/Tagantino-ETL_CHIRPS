@@ -15,6 +15,8 @@ import rasterio
 from rasterio.mask import mask
 import json
 import geopandas as gpd
+import numpy as np
+import pandas as pd
 
 # Import configuration if the file is used directly
 try:
@@ -218,4 +220,52 @@ def clip_raster(decompressed_file):
             logger.warning(f"Attempt {attempt+1}/{DEFAULT_MAX_RETRIES} failed: {e}")
 
         return False
+
+def raster_to_csv(input_tif, output_csv):
+    """
+    Convert a raster TIF file to CSV format.
+    
+    Args:
+        input_tif (str): Path to the input TIF file
+        output_csv (str): Path to the output CSV file
         
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Open the clipped raster
+        with rasterio.open(input_tif) as src:
+            # Read raster data
+            data = src.read(1)
+
+            # Get coordinates for each pixel
+            height, width = data.shape
+            cols, rows = np.meshgrid(np.arange(width), np.arange(height))
+            xs, ys = rasterio.transform.xy(src.transform, rows, cols)
+
+            # Get date from filename
+            filename = os.path.basename(input_tif)
+            date_info = parse_chirps_filename(filename)
+            date = date_info['date']
+
+            # Create DataFrame
+            df = pd.DataFrame({
+                'date': date,
+                'latitude': np.array(ys).flatten(),
+                'longitude': np.array(xs).flatten(),
+                'precipitation': data.flatten()
+            })
+
+            # Remove NoData values
+            df = df[df['precipitation'] != src.nodata]
+
+            # Create directories if they don't exist
+            os.makedirs(os.path.dirname(output_csv), exist_ok=True)
+            
+            # Save to CSV
+            df.to_csv(output_csv, index=False)
+            logger.info(f"Saved {len(df)} records to {output_csv}")
+            return True
+    except Exception as e:
+        logger.error(f"Error converting {input_tif} to CSV: {e}")
+        return False

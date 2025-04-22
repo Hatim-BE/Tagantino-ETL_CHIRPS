@@ -23,6 +23,7 @@ DEFAULT_MAX_FAILS = 3
 
 # Default paths
 DEFAULT_DATA_DIR = 'data/raw'
+DEFAULT_CSV_DIR = 'data/csv'
 
 # Security configurations
 MAX_FUTURE_DAYS = 30        # Maximum number of days in the future to avoid infinite loops
