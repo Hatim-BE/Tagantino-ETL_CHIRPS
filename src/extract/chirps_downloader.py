@@ -20,7 +20,8 @@ from utils import (
     validate_date,
     generate_paths,
     download_with_retry,
-    clip_raster
+    clip_raster,
+    raster_to_csv
 )
 
 logger = setup_logging()
@@ -63,11 +64,16 @@ def download_chirps_data(start_date, end_date, data_type, output_dir, clip, deco
                     decompressed_file = compressed_file[:-3]  # Remove the .gz prefix
                     
                     if decompress_gz_file(compressed_file, decompressed_file):
-                        # Delete compressed file after successful decompression (cl arg)
                         os.remove(compressed_file)
                     
-                    if clip:
-                        clip_raster(decompressed_file)
+                        if clip:
+                            clip_raster(decompressed_file)
+                        
+                        csv_dir = os.path.join(f"data/csv/{data_type}", dir_path)
+                        os.makedirs(csv_dir, exist_ok=True)
+                        csv_filename = file_name.removesuffix(".tif.gz") + ".csv"
+                        csv_file = os.path.join(csv_dir, csv_filename)
+                        raster_to_csv(decompressed_file, csv_file)
             else:
                 consecutive_fails += 1
                 logger.warning(f"Download failed {consecutive_fails}/{max_fails}")
