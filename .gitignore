@@ -174,3 +174,35 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# AWS specific
+.aws/
+aws.ini
+credentials
+credentials.csv
+.aws-credentials
+*.pem
+*aws-config*
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraformrc
+terraform.rc
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.lock.hcl
+
+# Local AWS configuration files that might contain credentials
+aws_config.ini
+aws_settings.json
+*credentials*.json
+*credentials*.yaml
+*credentials*.yml
+
+# Environment files that might contain AWS credentials

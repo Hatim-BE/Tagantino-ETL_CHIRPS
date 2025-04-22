@@ -1,3 +1,1 @@
-"""
-Extract module for CHIRPS data downloader.
-"""
+from .chirps_downloader import download_chirps_data

@@ -2,6 +2,7 @@
 Configuration settings for the CHIRPS ETL Pipeline.
 """
 import logging
+import os
 
 # Base URLs for CHIRPS products
 CHIRPS_BASE_URLS = {
@@ -32,6 +33,10 @@ FILE_FORMAT_MONTHLY = "chirps-v2.0.{year}.{month:02d}.tif.gz"
 DIR_FORMAT_DAILY = "{year}/"
 DIR_FORMAT_MONTHLY = ""
 MOROCCO_CLIP = "morocco.geojson"
+
+# AWS S3 Configuration
+AWS_S3_BUCKET = os.environ.get('AWS_S3_BUCKET', 'chirps-data')
+AWS_S3_REGION = os.environ.get('AWS_S3_REGION', 'us-east-1')
 
 # Initialize logging configuration
 def setup_logging():

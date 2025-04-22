@@ -206,7 +206,7 @@ def clip_raster(decompressed_file):
                     "width": out_image.shape[2],
                     "transform": out_transform
                 })
-                logger.info(f"Raster clipped to morocco sucessfully")
+                logger.info(f"Raster clipped to morocco sucessfully {decompressed_file}")
 
             # Save clipped output
             with rasterio.open(decompressed_file, "w", **out_meta) as dest:
