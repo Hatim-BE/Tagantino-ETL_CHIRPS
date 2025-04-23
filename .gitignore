@@ -1,5 +1,11 @@
 data/
 
+# Airflow
+logs/
+webserver_config.py
+airflow-webserver.pid
+airflow.cfg
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
