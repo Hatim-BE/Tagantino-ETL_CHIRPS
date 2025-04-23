@@ -29,6 +29,7 @@ try:
         DIR_FORMAT_DAILY,
         DIR_FORMAT_MONTHLY,
         MOROCCO_CLIP,
+        CHIRPS_BASE_URLS,
         setup_logging
     )
     logger = setup_logging()
@@ -109,6 +110,17 @@ def generate_paths(date_obj, data_type):
         DIR_FORMAT_MONTHLY,
         FILE_FORMAT_MONTHLY.format(year=date_obj.year, month=date_obj.month)
     )
+
+
+def chirps_file_exists(single_date, data_type='daily'):
+    dir_path, file_name = generate_paths(single_date, data_type)
+    full_url = f"{CHIRPS_BASE_URLS[data_type]}{dir_path}{file_name}"
+    try:
+        response = requests.head(full_url, timeout=5)
+        return response.status_code == 200
+    except requests.RequestException as e:
+        logger.error(f"Error during link search: {e}")
+        return False
 
 
 def download_with_retry(url, dest_path, max_retries=DEFAULT_MAX_RETRIES):

@@ -9,6 +9,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from src.extract.chirps_downloader import download_chirps_data
 from src.transform.processor import process_file
+from utils import chirps_file_exists
 
 default_args = {
     'owner': 'A2H',
@@ -42,7 +43,7 @@ with DAG(
                 output_dir='/opt/airflow/data/raw',
                 indefinite_mode=False,
             )
-            return files[0]  # single file
+            return files[0] if files else None  # single file
         return extract()
 
     def make_transform_task(date_str):
@@ -65,6 +66,8 @@ with DAG(
 
     for single_date in daterange(start_date, end_date):
         date_str = single_date.strftime('%Y%m%d')
+        if not chirps_file_exists(single_date):
+            continue
 
         with TaskGroup(group_id=f'etl_{date_str}') as etl_group:
             extract_task = make_extract_task(single_date, date_str)
