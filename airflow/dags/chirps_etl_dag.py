@@ -11,6 +11,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from src.extract.chirps_downloader import download_chirps_data
 from src.transform.processor import process_file
+from src.load.loader import upload_file_to_s3
 from utils import chirps_file_exists
 
 default_args = {
@@ -36,7 +37,7 @@ data_type = Variable.get('data_type')
 with DAG(
     'chirps_etl_by_file_grouped',
     default_args=default_args,
-    description='ETL by file (sequential extract → transform)',
+    description='ETL by file (sequential extract → transform → load)',
     schedule_interval=None,
     start_date=datetime(2004, 1, 1),
     catchup=False,
@@ -65,6 +66,17 @@ with DAG(
                 convert_to_csv=True
             )
         return transform
+    
+    def make_load_task(date_str):
+        @task(task_id=f"load_{date_str}")
+        def load(file_path):
+            success = upload_file_to_s3(
+                file_path=file_path,
+                bucket=None,
+                key=None
+            )
+            return success
+        return load
 
 
     start = EmptyOperator(task_id='start')
@@ -82,6 +94,8 @@ with DAG(
         with TaskGroup(group_id=f'etl_{date_str}') as etl_group:
             extract_task = make_extract_task(single_date, date_str)
             transform_task = make_transform_task(date_str)
-            transform_task(extract_task)
+            load_task = make_load_task(date_str)
+            transformed_file = transform_task(extract_task)
+            load_task(transformed_file)
 
         start >> etl_group >> end
