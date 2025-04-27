@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 from airflow import DAG
 from airflow.decorators import task
 from airflow.utils.task_group import TaskGroup
 from airflow.operators.empty import EmptyOperator
+from airflow.models import Variable
 import os
 import sys
 
@@ -20,9 +22,16 @@ default_args = {
     'retry_delay': timedelta(minutes=5),
 }
 
-def daterange(start_date, end_date):
-    for n in range((end_date - start_date).days + 1):
-        yield start_date + timedelta(n)
+def daterange(start_date, end_date, data_type="daily"):
+    current_date = start_date
+    while current_date <= end_date:  
+        yield current_date
+        if data_type == 'daily':
+            current_date += timedelta(1)
+        else:
+            current_date = (current_date + relativedelta(months=1))
+
+data_type = Variable.get('data_type')
 
 with DAG(
     'chirps_etl_by_file_grouped',
@@ -39,8 +48,8 @@ with DAG(
             files = download_chirps_data(
                 start_date=single_date,
                 end_date=single_date,
-                data_type='daily',
-                output_dir='/opt/airflow/data/raw',
+                data_type=data_type,
+                output_dir=f"/opt/airflow/data/{data_type}/raw",
                 indefinite_mode=False,
             )
             return files[0] if files else None  # single file
@@ -61,10 +70,11 @@ with DAG(
     start = EmptyOperator(task_id='start')
     end = EmptyOperator(task_id='end')
 
-    start_date = datetime(2023, 12, 31)
-    end_date = datetime(2024, 1, 1)
+    date_format = "%Y-%m-%d" if data_type == "daily" else "%Y-%m"
+    start_date = datetime.strptime(Variable.get("start_date"), date_format)
+    end_date = datetime.strptime(Variable.get("end_date"), date_format)
 
-    for single_date in daterange(start_date, end_date):
+    for single_date in daterange(start_date, end_date, data_type=data_type):
         date_str = single_date.strftime('%Y%m%d')
         if not chirps_file_exists(single_date):
             continue
