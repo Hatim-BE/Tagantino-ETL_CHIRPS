@@ -63,7 +63,6 @@ def download_chirps_data(start_date, end_date, data_type, output_dir,
         dest_dir = os.path.join(output_dir, dir_path)
         os.makedirs(dest_dir, exist_ok=True)
         tif_file = os.path.join(dest_dir, file_name)
-        print(tif_file.removesuffix(".gz"))
         if not os.path.exists(tif_file.removesuffix(".gz")):
             success = download_with_retry(full_url, tif_file)
             
@@ -148,7 +147,7 @@ def main():
         start_date=date_start,
         end_date=date_end,
         data_type=args.data_type,
-        output_dir=args.output_dir,
+        output_dir=f"data/{args.data_type}/raw",
         indefinite_mode=indefinite_mode,
         max_fails=args.max_fails
     )
@@ -169,40 +168,22 @@ def main():
                     csv_files = [f for f in transformed_files if f.endswith('.csv')]
                     
                     if csv_files:
-                        # Check if files are in a common directory
-                        dirs = set(os.path.dirname(f) for f in csv_files)
+                        success_count = 0
+                        for file_path in csv_files:
+                            # Preserve directory structure for S3 key if prefix is provided
+                            if args.s3_prefix:
+                                rel_path = os.path.basename(file_path)
+                                s3_key = os.path.join(args.s3_prefix, rel_path)
+                            else:
+                                s3_key = os.path.basename(file_path)
+                                
+                            if upload_file_to_s3(file_path, args.s3_bucket, s3_key):
+                                success_count += 1
                         
-                        if len(dirs) == 1 and all(os.path.isfile(f) for f in csv_files):
-                            # If all files are in the same directory, use upload_dir_to_s3
-                            csv_dir = dirs.pop()
-                            upload_count = upload_dir_to_s3(
-                                csv_dir,
-                                bucket=args.s3_bucket,
-                                prefix=args.s3_prefix,
-                                pattern='.csv'
-                            )
-                            if upload_count > 0:
-                                logger.info(f"Successfully uploaded {upload_count} files to S3")
-                            else:
-                                logger.error("Failed to upload any files to S3")
+                        if success_count == len(csv_files):
+                            logger.info(f"Successfully uploaded {success_count} files to S3")
                         else:
-                            # Otherwise upload files individually
-                            success_count = 0
-                            for file_path in csv_files:
-                                # Preserve directory structure for S3 key if prefix is provided
-                                if args.s3_prefix:
-                                    rel_path = os.path.basename(file_path)
-                                    s3_key = os.path.join(args.s3_prefix, rel_path)
-                                else:
-                                    s3_key = os.path.basename(file_path)
-                                    
-                                if upload_file_to_s3(file_path, args.s3_bucket, s3_key):
-                                    success_count += 1
-                            
-                            if success_count == len(csv_files):
-                                logger.info(f"Successfully uploaded {success_count} files to S3")
-                            else:
-                                logger.error(f"Failed to upload some files. {success_count}/{len(csv_files)} successful")
+                            logger.error(f"Failed to upload some files. {success_count}/{len(csv_files)} successful")
                     else:
                         logger.warning("No CSV files found for S3 upload")
                 except ImportError:

@@ -19,11 +19,11 @@ def upload_file_to_s3(file_path, bucket=None, key=None):
     if key is None:
         # By default, use filename as the key
         key = os.path.basename(file_path)
-    
+    import re
     # Create an S3 client
     s3_client = boto3.client('s3', region_name=AWS_S3_REGION)
     rel_path = os.path.relpath(file_path, start=os.getcwd())
-    file_path_chunks = rel_path.split('/')
+    file_path_chunks = re.split(r'[\\\/]', rel_path)
     try:
         logger.info(f"Uploading {file_path} to S3 bucket {bucket}, key: {key}")
         if file_path_chunks[1] == "daily":
