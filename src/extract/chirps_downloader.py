@@ -21,7 +21,7 @@ from utils import (
     download_with_retry
 )
 
-from src.load.loader import upload_file_to_s3, upload_dir_to_s3
+from src.load.loader import upload_file_to_s3
 
 logger = setup_logging()
 
