@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from airflow import DAG
 from airflow.decorators import task
-from airflow.utils.task_group import TaskGroup
 from airflow.operators.empty import EmptyOperator
 from airflow.models import Variable
 import os
@@ -12,7 +11,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from src.extract.chirps_downloader import download_chirps_data
 from src.transform.processor import process_file
 from src.load.loader import upload_file_to_s3
-from utils import chirps_file_exists
 
 default_args = {
     'owner': 'A2H',
@@ -23,16 +21,26 @@ default_args = {
     'retry_delay': timedelta(minutes=5),
 }
 
-def daterange(start_date, end_date, data_type="daily"):
-    current_date = start_date
-    while current_date <= end_date:  
-        yield current_date
-        if data_type == 'daily':
-            current_date += timedelta(1)
-        else:
-            current_date = (current_date + relativedelta(months=1))
+import os
+
+LAST_PROCESSED_FILE = '/opt/airflow/data/last_processed_date.txt'
+
+def get_last_processed_date():
+    if os.path.exists(LAST_PROCESSED_FILE):
+        with open(LAST_PROCESSED_FILE, 'r') as f:
+            date_str = f.read().strip()
+            return datetime.strptime(date_str, "%Y-%m-%d") if date_str else datetime(1981, 1, 1)
+    else:
+        return datetime(1981, 1, 1) # The beginning
+
+def save_last_processed_date(date_obj):
+    with open(LAST_PROCESSED_FILE, 'w') as f:
+        f.write(date_obj.strftime("%Y-%m-%d"))
 
 data_type = Variable.get('data_type')
+date_format = "%Y-%m-%d" if data_type == "daily" else "%Y-%m"
+start_date = get_last_processed_date()
+end_date = datetime.strptime(Variable.get("end_date"), date_format) # Or datetime.now()
 
 with DAG(
     'chirps_etl_by_file_grouped',
@@ -43,59 +51,34 @@ with DAG(
     catchup=False,
 ) as dag:
     
-    def make_extract_task(single_date, date_str):
-        @task(task_id=f"extract_{date_str}")
-        def extract():
-            files = download_chirps_data(
-                start_date=single_date,
-                end_date=single_date,
-                data_type=data_type,
-                output_dir=f"/opt/airflow/data/{data_type}/raw",
-                indefinite_mode=False,
-            )
-            return files[0] if files else None  # single file
-        return extract()
+    start = EmptyOperator(task_id='start')
+    end = EmptyOperator(task_id='end')
+    
+    @task(task_id=f"ETL_{start_date.strftime('%Y%m%d')}_to_{end_date.strftime('%Y%m%d')}")
+    def extract_transform_load():
+        files = download_chirps_data(
+            start_date=start_date,
+            end_date=end_date,
+            data_type=data_type,
+            output_dir=f"/opt/airflow/data/{data_type}/raw",
+            indefinite_mode=False,
+        )
+        for file_path in files:
 
-    def make_transform_task(date_str):
-        @task(task_id=f"transform_{date_str}")
-        def transform(file_path: str):
-            return process_file(
+            transformed_file = process_file(
                 file_path=file_path,
                 decompress=True,
                 clip=True,
                 convert_to_csv=True
             )
-        return transform
-    
-    def make_load_task(date_str):
-        @task(task_id=f"load_{date_str}")
-        def load(file_path):
-            success = upload_file_to_s3(
-                file_path=file_path,
+
+            upload_file_to_s3(
+                file_path=transformed_file,
                 bucket=None,
                 key=None
             )
-            return success
-        return load
+    @task(task_id="save_last_processed_date")
+    def update_last_date():
+        save_last_processed_date(end_date)
 
-
-    start = EmptyOperator(task_id='start')
-    end = EmptyOperator(task_id='end')
-
-    date_format = "%Y-%m-%d" if data_type == "daily" else "%Y-%m"
-    start_date = datetime.strptime(Variable.get("start_date"), date_format)
-    end_date = datetime.strptime(Variable.get("end_date"), date_format)
-
-    for single_date in daterange(start_date, end_date, data_type=data_type):
-        date_str = single_date.strftime('%Y%m%d')
-        if not chirps_file_exists(single_date):
-            continue
-
-        with TaskGroup(group_id=f'etl_{date_str}') as etl_group:
-            extract_task = make_extract_task(single_date, date_str)
-            transform_task = make_transform_task(date_str)
-            load_task = make_load_task(date_str)
-            transformed_file = transform_task(extract_task)
-            load_task(transformed_file)
-
-        start >> etl_group >> end
+    start >> extract_transform_load() >> update_last_date() >> end
